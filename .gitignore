@@ -27,7 +27,7 @@ out/
 !**/src/test/**/out/
 .DS_Store
 src/main/resources/application.properties
-Инструкция 
+/Users/philyaborozdin/Desktop/WebsiteSurfingBot/Инструкция
 
 ### NetBeans ###
 /nbproject/private/
