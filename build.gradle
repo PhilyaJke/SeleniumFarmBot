@@ -17,9 +17,5 @@ dependencies {
     implementation 'org.seleniumhq.selenium:selenium-java:4.8.3'
     implementation group: 'org.json', name: 'json', version: '20230227'
     implementation 'com.github.2captcha:2captcha-java:1.1.0'
-
 }
 
-tasks.named('test') {
-    useJUnitPlatform()
-}
