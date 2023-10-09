@@ -16,7 +16,7 @@ build/
 bin/
 !**/src/main/**/bin/
 !**/src/test/**/bin/
-
+AccountsData
 ### IntelliJ IDEA ###
 .idea
 *.iws
@@ -40,5 +40,5 @@ src/main/resources/application.properties
 ### VS Code ###
 .vscode/
 
-Accounts
+src/main/resources/Accounts
 FirstLastNamesExample
