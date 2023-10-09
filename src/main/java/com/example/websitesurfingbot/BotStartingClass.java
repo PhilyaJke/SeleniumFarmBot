@@ -1,7 +1,7 @@
 package com.example.websitesurfingbot;
 
+import com.example.jdbc.Initialize;
 import org.openqa.selenium.*;
-import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.devtools.DevTools;
@@ -10,10 +10,12 @@ import org.openqa.selenium.devtools.HasDevTools;
 import org.openqa.selenium.remote.Augmenter;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
-
-import java.io.*;
+import java.net.MalformedURLException;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -25,6 +27,7 @@ class LoginAccounts implements Runnable {
     private final String proxyIP;
     private final String proxyUsername;
     private final String proxyPassword;
+    private static final Initialize initialize = new Initialize();
 
     public LoginAccounts(String username, String password, String proxyIP, String proxyUsername, String proxyPassword) {
         this.username = username;
@@ -36,45 +39,58 @@ class LoginAccounts implements Runnable {
 
     @Override
     public void run() {
-        WebDriver driver = setup();
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofMillis(100000L));
-        login(driver, wait);
-        wait.until(ExpectedConditions.urlToBe("https://socpublic.com/account/"));
-        driver.navigate().to("https://socpublic.com/account/visit.html?type=redirect&page_limit=100&page=1");
-        wait.until(ExpectedConditions.urlToBe("https://socpublic.com/account/visit.html?type=redirect&page_limit=100&page=1"));
-        todo(driver, wait);
+        try {
+            WebDriver driver = setup();
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofMillis(100000L));
+            login(driver, wait);
+            wait.until(ExpectedConditions.urlToBe("https://socpublic.com/account/"));
+            driver.navigate().to("https://socpublic.com/account/visit.html?type=redirect&page_limit=100&page=1");
+            wait.until(ExpectedConditions.urlToBe("https://socpublic.com/account/visit.html?type=redirect&page_limit=100&page=1"));
+            todo(driver, wait);
+        }catch (TimeoutException | DevToolsException | MalformedURLException ignored){}
     }
 
-    public WebDriver setup(){
-            Proxy proxy = new Proxy();
-            proxy.setHttpProxy(proxyIP);
-            proxy.setSslProxy(proxyIP);
-            proxy.setProxyType(Proxy.ProxyType.MANUAL);
-            proxy.setSocksPassword(proxyPassword);
-            proxy.setSocksUsername(proxyUsername);
-            ChromeOptions options = new ChromeOptions();
-            System.setProperty("webdriver.chrome.driver", BotStartingClass.properties.getProperty("chrome.driver"));
-            System.setProperty("webdriver.chrome.silentOutput", "true");
-            Logger.getLogger("org.openqa.selenium").setLevel(Level.OFF);
-            options.addArguments("--remote-allow-origins=*");
-            options.addArguments("--disable-logging");
-            options.addArguments("--disable-popup-blocking");
-            options.setHeadless(true);
-            options.setProxy(proxy);
-            WebDriver driver = new ChromeDriver(options);
-            driver.manage().window().setSize(new Dimension(600, 250));
-            DevTools devTools = ((HasDevTools) driver).getDevTools();
-            devTools.createSession();
-            driver = new Augmenter().
-                    addDriverAugmentation("chrome", HasAuthentication.class, (caps, exec) ->
-                            (whenThisMatches, useTheseCredentials) -> devTools.getDomains().network()
-                                    .addAuthHandler(whenThisMatches, useTheseCredentials)).augment(driver);
-            ((HasAuthentication) driver).register(UsernameAndPassword.of(proxyUsername, proxyPassword));
-            driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(5));
+    private Proxy setupProxy(){
+        Proxy proxy = new Proxy();
+        proxy.setHttpProxy(proxyIP);
+        proxy.setSslProxy(proxyIP);
+        proxy.setProxyType(Proxy.ProxyType.MANUAL);
+        proxy.setSocksPassword(proxyPassword);
+        proxy.setSocksUsername(proxyUsername);
+        return proxy;
+
+    }
+
+    private ChromeOptions setupChromeOptions(){
+        ChromeOptions options = new ChromeOptions();
+        System.setProperty("webdriver.chrome.driver", BotStartingClass.properties.getProperty("chrome.driver"));
+        System.setProperty("webdriver.chrome.silentOutput", "true");
+        Logger.getLogger("org.openqa.selenium").setLevel(Level.OFF);
+        options.addArguments("--remote-allow-origins=*");
+        options.addArguments("--disable-logging");
+        options.addArguments("--disable-popup-blocking");
+        options.addArguments("--headless");
+        options.addArguments("--no-sandbox");
+        options.addArguments("--disable-dev-shm-usage");
+        options.setProxy(setupProxy());
+        return options;
+    }
+
+    private WebDriver setup() throws MalformedURLException {
+        ChromeOptions options = setupChromeOptions();
+        WebDriver driver = new ChromeDriver(options);
+        driver = new Augmenter().augment(driver);
+        DevTools devTools = ((HasDevTools) driver).getDevTools();
+        devTools.createSession();
+        driver = new Augmenter().
+                addDriverAugmentation("chrome", HasAuthentication.class, (caps, exec) ->
+                        (whenThisMatches, useTheseCredentials) -> devTools.getDomains().network()
+                                .addAuthHandler(whenThisMatches, useTheseCredentials)).augment(driver);
+        ((HasAuthentication) driver).register(UsernameAndPassword.of(proxyUsername, proxyPassword));
         return driver;
     }
 
-    public void login(WebDriver driver, WebDriverWait wait) {
+    private void login(WebDriver driver, WebDriverWait wait) {
         System.out.println(Thread.currentThread().getName() + " начал вход на сайт");
         driver.navigate().to("https://socpublic.com/auth_login.html");
         try {
@@ -82,7 +98,6 @@ class LoginAccounts implements Runnable {
                 System.out.println(Thread.currentThread().getName() + " доступ на сайт запрещен, закрытие сессии");
                 driver.quit();
                 Thread.currentThread().interrupt();
-                Thread.currentThread().stop();
             }
         }catch (Exception ignored){}
         try {
@@ -97,16 +112,18 @@ class LoginAccounts implements Runnable {
             var element = driver.findElement(By.id("g-recaptcha-response"));
             ((JavascriptExecutor) driver).executeScript("arguments[0].style.display='block';", element);
             element.sendKeys(code);
-            driver.findElement(By.xpath("/html/body/div[1]/div/div[2]/div/div/div[2]/form/div/div[4]/div/button")).click();
+            ((JavascriptExecutor) driver).executeScript("arguments[0].style.display='none';", element);
+            wait.until(ExpectedConditions.elementToBeClickable(By.className("btn-primary")));
+            driver.findElements(By.className("btn-primary")).get(0).click();
         }catch (TimeoutException exc){
             System.out.println("Ошибка входа. Прекращение процесса");
             driver.quit();
             Thread.currentThread().interrupt();
-            Thread.currentThread().stop();
         }
     }
 
-    public static void todo(WebDriver driver, WebDriverWait wait){
+    //заменить synchronized
+    private static void todo(WebDriver driver, WebDriverWait wait){
         driver.navigate().refresh();
         synchronized (driver) {
             while (true) {
@@ -130,60 +147,59 @@ class LoginAccounts implements Runnable {
                     wait.until(ExpectedConditions.visibilityOfAllElementsLocatedBy(By.xpath("/html/body/div[3]/div[1]/div[2]/div/div[2]/div/form/div[3]/div/div/span[1]")));
                     String balance = driver.findElement(By.xpath("/html/body/div[3]/div[1]/div[2]/div/div[2]/div/form/div[3]/div/div/span[1]")).getText();
                     System.out.println(Thread.currentThread().getName() + " Завершил выполнение всех заданий и завершает сессию. Баланс: " + balance);
+                    initialize.updateSocPublicBalance(Double.valueOf(balance), Thread.currentThread().getName());
                     driver.quit();
                     Thread.currentThread().interrupt();
-                    Thread.currentThread().stop();
+                    break;
                 }
             }
         }
     }
 }
 
-public class BotStartingClass {
+public class BotStartingClass{
 
     public static final Properties properties = PropertiesInitialize.getProperties();
 
-    public static void main(String[] args) {
-
-        List<List<String>> accounts = getAccountsInfo();
+    public static void main(String[] args){
+        Initialize initialize = new Initialize();
+        List<Initialize.Accounts> accounts = initialize.getAllAccounts();
         List<List<Thread>> threads = new ArrayList<>();
-        for (int i = 0; i <= accounts.size()-3; i+=3) {
+        for (int i = 0; i < accounts.size()-10; i+=10) {
             List<Thread>list = new ArrayList<>();
-            for(int j = i; j < 12; j++) {
-                List<String> strings = accounts.get(j);
-                System.out.println(strings);
-                Thread thread = new Thread(new LoginAccounts(strings.get(0), strings.get(1),
-                        strings.get(2), strings.get(3), strings.get(4)));
-                thread.setName(strings.get(0));
+            for(int j = i; j < i+10; j++) {
+                Initialize.Accounts accountsInfo = accounts.get(j);
+                Thread thread = new Thread(new LoginAccounts(accountsInfo.getGmail(), accountsInfo.getPassword(),
+                        accountsInfo.getProxy_ip(), accountsInfo.getProxy_username(), accountsInfo.getProxy_password()));
+                thread.setName(accountsInfo.getGmail());
                 list.add(thread);
-                if (list.size() == 3) {
+                if (list.size() == 10) {
                     threads.add(list);
                 }
             }
         }
-
         for(int i = 0; i < threads.size();){
             threads.get(i).forEach(Thread::start);
-//            while (true){
-//                if (threads.get(i).stream().filter(Thread::isInterrupted).count() == threads.get(i).size()) {
-//                    threads.remove(threads.get(i));
-//                    break;
-//                }
-//            }
+            while (true){
+                if (threads.get(i).stream().filter(Thread::isInterrupted).count() == threads.get(i).size()) {
+                    threads.remove(threads.get(i));
+                    break;
+                }
+            }
         }
         System.out.println("Майнинг закончился!)");
     }
-
-    public static List getAccountsInfo(){
-        List list = new ArrayList();
-        File file = new File(properties.getProperty("accounts"));
-        try(Scanner scanner = new Scanner(new FileInputStream(file))){
-            while (scanner.hasNextLine()){
-                list.add(Arrays.stream(scanner.nextLine().split(" ")).collect(Collectors.toList()));
-            }
-        }catch (IOException exc ){
-            exc.printStackTrace();
-        }
-        return list;
-    }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -2,9 +2,6 @@ package com.example.websitesurfingbot;
 
 import com.twocaptcha.TwoCaptcha;
 import com.twocaptcha.captcha.ReCaptcha;
-
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Properties;
 
 public class reCaptchaSolver {
